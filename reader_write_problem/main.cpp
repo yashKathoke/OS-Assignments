@@ -1,90 +1,66 @@
-// reader_writer.cpp
 #include <iostream>
 #include <thread>
 #include <mutex>
-#include <vector>
-#include <chrono>
 
-int shared_data = 0;          // shared resource
-int read_count = 0;           // number of active readers
+int shared_data = 0;
+int read_count = 0;
 
 std::mutex mutex_readcount;   // protects read_count
-std::mutex write_lock;        // ensures exclusive writer access
-std::mutex print_lock;        // protects std::cout
+std::mutex write_lock;        // ensures writers get exclusive access
+std::mutex print_lock; // protects std::cout
 
 void reader(int id) {
-    // Entry section for reader
+    // Entry Section
     mutex_readcount.lock();
     read_count++;
     if (read_count == 1) {
-        // first reader locks writer
-        write_lock.lock();
+        write_lock.lock();    // first reader blocks writers
     }
     mutex_readcount.unlock();
 
-    // Critical section (reading)
+    // Critical Section (Reading)
     {
         std::lock_guard<std::mutex> guard(print_lock);
-        std::cout << "Reader " << id 
-                  << " is reading shared_data = " << shared_data 
-                  << std::endl;
+        std::cout << "Reader " << id << " reads shared_data = " << shared_data << "\n";
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(500)); // simulate reading
 
-    // Exit section for reader
+    // Exit Section
     mutex_readcount.lock();
     read_count--;
     if (read_count == 0) {
-        // last reader unlocks writer
-        write_lock.unlock();
+        write_lock.unlock();  // last reader releases writer lock
     }
     mutex_readcount.unlock();
 }
 
 void writer(int id) {
-    // Entry section for writer
+    // Entry Section
     write_lock.lock();
 
-    // Critical section (writing)
+    // Critical Section (Writing)
+
     shared_data++;
     {
         std::lock_guard<std::mutex> guard(print_lock);
-        std::cout << "Writer " << id 
-                  << " updated shared_data to " << shared_data 
-                  << std::endl;
+        std::cout << "Writer " << id << " updates shared_data to " << shared_data << "\n";
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(500)); // simulate writing
 
-    // Exit section for writer
+    // Exit Section
     write_lock.unlock();
 }
 
 int main() {
-    const int NUM_READERS = 5;
-    const int NUM_WRITERS = 3;
+    std::thread r1(reader, 1);
+    std::thread r2(reader, 2);
+    std::thread w1(writer, 1);
+    std::thread r3(reader, 3);
+    std::thread w2(writer, 2);
 
-    std::vector<std::thread> readers;
-    std::vector<std::thread> writers;
-
-    // Create reader threads
-    for (int i = 0; i < NUM_READERS; ++i) {
-        readers.emplace_back(reader, i + 1);
-    }
-
-    // Create writer threads
-    for (int i = 0; i < NUM_WRITERS; ++i) {
-        writers.emplace_back(writer, i + 1);
-    }
-
-    // Join reader threads
-    for (auto& t : readers) {
-        t.join();
-    }
-
-    // Join writer threads
-    for (auto& t : writers) {
-        t.join();
-    }
+    r1.join();
+    r2.join();
+    w1.join();
+    r3.join();
+    w2.join();
 
     return 0;
 }
